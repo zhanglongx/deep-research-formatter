@@ -3,7 +3,10 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { normalizeDeepResearchMarkdown } from "../src/normalizer";
+import {
+  createEmptyStats,
+  normalizeDeepResearchMarkdown,
+} from "../src/normalizer";
 
 const TOKEN_START = "\uE200";
 const TOKEN_PART = "\uE202";
@@ -66,6 +69,33 @@ describe("normalizeDeepResearchMarkdown", () => {
 
     expect(result.text).toBe(input);
     expect(result.stats.citeRemoved).toBe(0);
+  });
+
+  it("does not rewrite whitespace-only blank lines when no markers exist", () => {
+    const examplePath = resolve(
+      process.cwd(),
+      "examples",
+      "存储器件价格周期历史.md",
+    );
+    const example = readFileSync(examplePath, "utf8");
+    const result = normalizeDeepResearchMarkdown(example);
+
+    expect(result.text).toBe(example);
+    expect(result.stats).toEqual(createEmptyStats());
+  });
+
+  it("collapses blank runs created by removing cite-only lines", () => {
+    const input = [
+      "第一段",
+      "",
+      wrapToken("cite", "turn1view0"),
+      "",
+      "第二段",
+    ].join("\n");
+    const result = normalizeDeepResearchMarkdown(input);
+
+    expect(result.text).toBe(["第一段", "", "第二段"].join("\n"));
+    expect(result.stats.citeRemoved).toBe(1);
   });
 
   it("normalizes a full example document without leaving markers behind", () => {

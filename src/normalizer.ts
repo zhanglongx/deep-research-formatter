@@ -16,6 +16,12 @@ export interface NormalizeResult {
   stats: NormalizeStats;
 }
 
+interface NormalizedLine {
+  text: string;
+  changed: boolean;
+  blankKind: "nonblank" | "preserved" | "generated";
+}
+
 export function createEmptyStats(): NormalizeStats {
   return {
     citeRemoved: 0,
@@ -31,20 +37,21 @@ export function normalizeDeepResearchMarkdown(input: string): NormalizeResult {
   const lines = input.split(/\r?\n/u);
   const stats = createEmptyStats();
   const frontmatterEndLine = findFrontmatterEndLine(lines);
-  const normalizedLines: string[] = [];
+  const normalizedLines: NormalizedLine[] = [];
   let inFence = false;
   let activeFenceMarker = "";
+  let hasChanges = false;
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
 
     if (frontmatterEndLine !== -1 && index <= frontmatterEndLine) {
-      normalizedLines.push(line);
+      normalizedLines.push(createNormalizedLine(line, line));
       continue;
     }
 
     if (inFence) {
-      normalizedLines.push(line);
+      normalizedLines.push(createNormalizedLine(line, line));
       if (isFenceBoundary(line, activeFenceMarker)) {
         inFence = false;
         activeFenceMarker = "";
@@ -54,13 +61,22 @@ export function normalizeDeepResearchMarkdown(input: string): NormalizeResult {
 
     const nextFenceMarker = getFenceMarker(line);
     if (nextFenceMarker) {
-      normalizedLines.push(line);
+      normalizedLines.push(createNormalizedLine(line, line));
       inFence = true;
       activeFenceMarker = nextFenceMarker;
       continue;
     }
 
-    normalizedLines.push(normalizeInlineContent(line, stats));
+    const normalizedLine = normalizeInlineContent(line, stats);
+    normalizedLines.push(normalizedLine);
+    hasChanges ||= normalizedLine.changed;
+  }
+
+  if (!hasChanges) {
+    return {
+      text: input,
+      stats,
+    };
   }
 
   const collapsedLines = collapseBlankLines(normalizedLines, frontmatterEndLine);
@@ -108,7 +124,33 @@ function isFenceBoundary(line: string, activeMarker: string): boolean {
   return pattern.test(line);
 }
 
-function normalizeInlineContent(line: string, stats: NormalizeStats): string {
+function createNormalizedLine(originalLine: string, text: string): NormalizedLine {
+  const changed = text !== originalLine;
+
+  if (text.trim().length > 0) {
+    return {
+      text,
+      changed,
+      blankKind: "nonblank",
+    };
+  }
+
+  if (originalLine.trim().length === 0) {
+    return {
+      text: originalLine,
+      changed,
+      blankKind: "preserved",
+    };
+  }
+
+  return {
+    text: "",
+    changed,
+    blankKind: "generated",
+  };
+}
+
+function normalizeInlineContent(line: string, stats: NormalizeStats): NormalizedLine {
   let output = "";
 
   for (let index = 0; index < line.length; ) {
@@ -144,7 +186,7 @@ function normalizeInlineContent(line: string, stats: NormalizeStats): string {
     index = closingIndex + 1;
   }
 
-  return cleanupLineWhitespace(output, line);
+  return createNormalizedLine(line, cleanupLineWhitespace(output, line));
 }
 
 function countRepeatedCharacters(input: string, startIndex: number, character: string): number {
@@ -289,49 +331,64 @@ function cleanupLineWhitespace(line: string, originalLine: string): string {
   return cleaned;
 }
 
-function collapseBlankLines(lines: string[], frontmatterEndLine: number): string[] {
+function collapseBlankLines(lines: NormalizedLine[], frontmatterEndLine: number): string[] {
   const output: string[] = [];
   let inFence = false;
   let activeFenceMarker = "";
-  let blankLineCount = 0;
+  let blankRun: NormalizedLine[] = [];
+
+  const flushBlankRun = () => {
+    if (blankRun.length === 0) {
+      return;
+    }
+
+    const hasGeneratedBlank = blankRun.some((line) => line.blankKind === "generated");
+    if (hasGeneratedBlank) {
+      output.push("");
+    } else {
+      output.push(...blankRun.map((line) => line.text));
+    }
+
+    blankRun = [];
+  };
 
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
 
     if (frontmatterEndLine !== -1 && index <= frontmatterEndLine) {
-      output.push(line);
+      flushBlankRun();
+      output.push(line.text);
       continue;
     }
 
     if (inFence) {
-      output.push(line);
-      if (isFenceBoundary(line, activeFenceMarker)) {
+      flushBlankRun();
+      output.push(line.text);
+      if (isFenceBoundary(line.text, activeFenceMarker)) {
         inFence = false;
         activeFenceMarker = "";
       }
       continue;
     }
 
-    const nextFenceMarker = getFenceMarker(line);
+    const nextFenceMarker = getFenceMarker(line.text);
     if (nextFenceMarker) {
-      blankLineCount = 0;
-      output.push(line);
+      flushBlankRun();
+      output.push(line.text);
       inFence = true;
       activeFenceMarker = nextFenceMarker;
       continue;
     }
 
-    if (line.trim().length === 0) {
-      if (blankLineCount < 2) {
-        output.push("");
-      }
-      blankLineCount += 1;
+    if (line.text.trim().length === 0) {
+      blankRun.push(line);
       continue;
     }
 
-    blankLineCount = 0;
-    output.push(line);
+    flushBlankRun();
+    output.push(line.text);
   }
 
+  flushBlankRun();
   return output;
 }
