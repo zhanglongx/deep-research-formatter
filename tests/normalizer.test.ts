@@ -89,15 +89,17 @@ describe("normalizeDeepResearchMarkdown", () => {
   });
 
   it("does not rewrite whitespace-only blank lines when no markers exist", () => {
-    const examplePath = resolve(
-      process.cwd(),
-      "examples",
-      "存储器件价格周期历史.md",
-    );
-    const example = readFileSync(examplePath, "utf8");
-    const result = normalizeDeepResearchMarkdown(example);
+    const input = [
+      "# 标题",
+      "第一段",
+      "  ",
+      "\t",
+      "",
+      "第二段包含 f( x ) 和 hello , world",
+    ].join("\n");
+    const result = normalizeDeepResearchMarkdown(input);
 
-    expect(result.text).toBe(example);
+    expect(result.text).toBe(input);
     expect(result.stats).toEqual(createEmptyStats());
   });
 
