@@ -88,10 +88,6 @@ export function normalizeDeepResearchMarkdown(input: string): NormalizeResult {
   };
 }
 
-export function hasDeepResearchMarkers(input: string): boolean {
-  return input.includes(TOKEN_START) && input.includes(TOKEN_END);
-}
-
 function detectLineEnding(input: string): string {
   return input.includes("\r\n") ? "\r\n" : "\n";
 }
