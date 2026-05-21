@@ -2,11 +2,12 @@
 
 Deep Research Formatter is an Obsidian plugin for cleaning Markdown exported from ChatGPT Deep Research.
 
-Deep Research exports often contain inline marker tokens such as citation, entity, and URL annotations that are readable inside ChatGPT but noisy in plain Markdown. This plugin removes or rewrites those markers so the document is easier to read in Obsidian.
+Deep Research exports often contain inline marker tokens such as citation, entity, and URL annotations that are readable inside ChatGPT but noisy in plain Markdown. This plugin removes or rewrites those markers so the document is easier to read in Obsidian, including both private-use marker wrappers and exported `【...†...】` citation blocks.
 
 ## What it does
 
 - Removes `cite` markers entirely.
+- Removes exported `【...†...】` citation blocks entirely.
 - Replaces `entity` markers with their readable label.
 - Replaces `url` markers with their readable label.
 - Falls back safely for unknown marker types when possible.
@@ -127,6 +128,7 @@ npm run format:vault -- --help
 The current implementation recognizes the marker wrapper used in Deep Research exports and handles these marker types:
 
 - `cite`: removed
+- `【...†...】` citation blocks: removed
 - `entity`: replaced with readable text
 - `url`: replaced with readable text
 - unknown tags: best-effort readable fallback, otherwise removed
